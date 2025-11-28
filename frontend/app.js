@@ -189,6 +189,8 @@ async function handleTaskSubmit(e) {
         updateTaskList();
         updateAnalyzeButton();
         
+        // Store task title for success message before resetting form
+        const taskTitle = data.task.title;
        
         elements.taskForm.reset();
         setDefaultDueDate();
@@ -198,10 +200,10 @@ async function handleTaskSubmit(e) {
         elements.taskTitle.focus();
         
        
-        showSuccessMessage('Task added successfully!');
+        showSuccessMessage(`Task "${taskTitle}" added successfully!`);
         
     } catch (error) {
-        alert(`Error adding task: ${error.message}`);
+        showErrorMessage(`Error adding task: ${error.message}`);
     }
 }
 
@@ -239,7 +241,15 @@ function updateTaskList() {
 async function removeTask(index) {
     const task = tasks[index];
     
-    if (!confirm(`Delete task "${task.title}"?`)) {
+    const confirmed = await showConfirm(
+        `Are you sure you want to delete task "${task.title}"?`,
+        'Delete Task',
+        'Delete',
+        'Cancel',
+        'danger'
+    );
+    
+    if (!confirmed) {
         return;
     }
     
@@ -259,14 +269,22 @@ async function removeTask(index) {
         showSuccessMessage('Task deleted successfully!');
         
     } catch (error) {
-        alert(`Error deleting task: ${error.message}`);
+        showErrorMessage(`Error deleting task: ${error.message}`);
     }
 }
 
 async function clearAllTasks() {
     if (tasks.length === 0) return;
     
-    if (!confirm('Are you sure you want to clear all tasks? This will delete them from the database.')) {
+    const confirmed = await showConfirm(
+        'Are you sure you want to clear all tasks? This will delete them from the database.',
+        'Clear All Tasks',
+        'Clear All',
+        'Cancel',
+        'danger'
+    );
+    
+    if (!confirmed) {
         return;
     }
     
@@ -287,7 +305,7 @@ async function clearAllTasks() {
         showSuccessMessage('All tasks cleared successfully!');
         
     } catch (error) {
-        alert(`Error clearing tasks: ${error.message}`);
+        showErrorMessage(`Error clearing tasks: ${error.message}`);
     }
 }
 
@@ -299,7 +317,7 @@ async function handleLoadJson() {
     const jsonText = elements.jsonInput.value.trim();
     
     if (!jsonText) {
-        alert('Please paste JSON data first.');
+        showWarningMessage('Please paste JSON data first.');
         return;
     }
     
@@ -333,15 +351,14 @@ async function handleLoadJson() {
         
         let message = `Successfully loaded ${result.created} task(s)!`;
         if (result.errors && result.errors.length > 0) {
-            message += `\n\nFailed to load ${result.errors.length} task(s):`;
-            result.errors.forEach(err => {
-                message += `\n- ${err.task}: ${err.error}`;
-            });
+            const errorDetails = result.errors.map(err => `${err.task}: ${err.error}`).join(', ');
+            showWarningMessage(`${message} However, ${result.errors.length} task(s) failed to load: ${errorDetails}`);
+        } else {
+            showSuccessMessage(message);
         }
-        alert(message);
         
     } catch (error) {
-        alert(`Error loading JSON: ${error.message}`);
+        showErrorMessage(`Error loading JSON: ${error.message}`);
     }
 }
 
@@ -407,7 +424,7 @@ async function loadExampleData() {
         showSuccessMessage('Example tasks loaded successfully!');
         
     } catch (error) {
-        alert(`Error loading example data: ${error.message}`);
+        showErrorMessage(`Error loading example data: ${error.message}`);
     }
 }
 
@@ -659,6 +676,8 @@ function showError(message) {
     elements.emptyState.style.display = 'none';
     elements.results.style.display = 'none';
     elements.suggestions.style.display = 'none';
+    // Also show as toast notification
+    showErrorMessage(message);
 }
 
 function hideResults() {
@@ -772,14 +791,6 @@ function displayResults(analyzedTasks, suggestions) {
                 <div class="suggestion-reason">
                     💡 ${suggestion.reason}
                 </div>
-                <div class="suggestion-feedback">
-                    <button class="btn-feedback btn-helpful" onclick="submitFeedback(${suggestion.task.id}, true)">
-                        ✓ Helpful
-                    </button>
-                    <button class="btn-feedback btn-not-helpful" onclick="submitFeedback(${suggestion.task.id}, false)">
-                        ✗ Not Helpful
-                    </button>
-                </div>
             </div>
         `).join('');
     }
@@ -819,32 +830,127 @@ async function loadTasksFromDatabase() {
 }
 
 
-function showSuccessMessage(message) {
-   
+// Toast Notification System
+let toastContainer = null;
+
+function getToastContainer() {
+    if (!toastContainer) {
+        toastContainer = document.createElement('div');
+        toastContainer.className = 'toast-container';
+        document.body.appendChild(toastContainer);
+    }
+    return toastContainer;
+}
+
+function showToast(message, type = 'success', duration = 4000) {
+    const container = getToastContainer();
     const toast = document.createElement('div');
-    toast.className = 'success-toast';
-    toast.textContent = message;
-    toast.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        background: var(--success);
-        color: white;
-        padding: 1rem 1.5rem;
-        border-radius: var(--radius-md);
-        box-shadow: var(--shadow-lg);
-        z-index: 10000;
-        animation: slideIn 0.3s ease-out;
+    toast.className = `toast toast-${type}`;
+    
+    const icons = {
+        success: '✅',
+        error: '❌',
+        warning: '⚠️',
+        info: 'ℹ️'
+    };
+    
+    toast.innerHTML = `
+        <span class="toast-icon">${icons[type] || icons.success}</span>
+        <span class="toast-content">${message}</span>
+        <button class="toast-close" onclick="this.parentElement.remove()">×</button>
     `;
     
-    document.body.appendChild(toast);
+    container.appendChild(toast);
     
+    // Auto remove after duration
     setTimeout(() => {
-        toast.style.animation = 'slideOut 0.3s ease-out';
+        toast.classList.add('toast-exiting');
         setTimeout(() => {
-            document.body.removeChild(toast);
+            if (toast.parentElement) {
+                toast.remove();
+            }
         }, 300);
-    }, 3000);
+    }, duration);
+    
+    return toast;
+}
+
+function showSuccessMessage(message) {
+    return showToast(message, 'success');
+}
+
+function showErrorMessage(message) {
+    return showToast(message, 'error', 5000);
+}
+
+function showWarningMessage(message) {
+    return showToast(message, 'warning', 4500);
+}
+
+function showInfoMessage(message) {
+    return showToast(message, 'info');
+}
+
+function showConfirm(message, title = 'Confirm Action', confirmText = 'Confirm', cancelText = 'Cancel', type = 'warning') {
+    return new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        overlay.className = 'confirm-overlay';
+        
+        const icons = {
+            warning: '⚠️',
+            danger: '🗑️',
+            info: 'ℹ️',
+            question: '❓'
+        };
+        
+        overlay.innerHTML = `
+            <div class="confirm-dialog">
+                <div class="confirm-dialog-header">
+                    <span class="confirm-dialog-icon">${icons[type] || icons.warning}</span>
+                    <div class="confirm-dialog-title">${title}</div>
+                </div>
+                <div class="confirm-dialog-message">${message}</div>
+                <div class="confirm-dialog-actions">
+                    <button class="confirm-btn confirm-btn-secondary" data-action="cancel">${cancelText}</button>
+                    <button class="confirm-btn confirm-btn-${type === 'danger' ? 'danger' : 'primary'}" data-action="confirm">${confirmText}</button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(overlay);
+        
+        const handleClick = (e) => {
+            const action = e.target.getAttribute('data-action');
+            if (action === 'confirm') {
+                overlay.classList.add('toast-exiting');
+                setTimeout(() => {
+                    overlay.remove();
+                }, 300);
+                resolve(true);
+            } else if (action === 'cancel' || e.target === overlay) {
+                overlay.classList.add('toast-exiting');
+                setTimeout(() => {
+                    overlay.remove();
+                }, 300);
+                resolve(false);
+            }
+        };
+        
+        overlay.addEventListener('click', handleClick);
+        
+        // Close on Escape key
+        const handleEscape = (e) => {
+            if (e.key === 'Escape') {
+                overlay.classList.add('toast-exiting');
+                setTimeout(() => {
+                    overlay.remove();
+                }, 300);
+                document.removeEventListener('keydown', handleEscape);
+                resolve(false);
+            }
+        };
+        document.addEventListener('keydown', handleEscape);
+    });
 }
 
 function getPriorityLevel(score) {
@@ -880,17 +986,23 @@ async function loadDependencyGraph() {
         });
         
         if (!response.ok) {
+            console.warn('Failed to fetch dependency graph:', response.status);
             return; 
         }
         
         const graphData = await response.json();
         
+        const graphContainer = document.getElementById('dependencyGraph');
+        if (!graphContainer) return;
+        
         if (graphData.nodes && graphData.nodes.length > 0) {
-            const graphContainer = document.getElementById('dependencyGraph');
-            if (graphContainer) {
-                graphContainer.style.display = 'block';
+            graphContainer.style.display = 'block';
+            // Use setTimeout to ensure container is visible before calculating dimensions
+            setTimeout(() => {
                 renderDependencyGraph(graphData);
-            }
+            }, 10);
+        } else {
+            graphContainer.style.display = 'none';
         }
     } catch (error) {
         console.warn('Failed to load dependency graph:', error);
@@ -901,93 +1013,283 @@ function renderDependencyGraph(graphData) {
     const container = document.getElementById('graphContainer');
     if (!container) return;
     
-   
+    // Clear container
+    container.innerHTML = '';
+    
+    // Get container dimensions - ensure we have valid dimensions
+    const width = Math.max(container.clientWidth || 800, 800);
+    const height = 500;
+    const padding = 60;
+    
+    // Create SVG with proper viewBox for scaling
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('width', '100%');
-    svg.setAttribute('height', '400');
-    svg.style.background = 'white';
-    container.innerHTML = '';
+    svg.setAttribute('height', height);
+    svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+    svg.style.background = 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)';
+    svg.style.display = 'block';
+    svg.style.borderRadius = '8px';
     container.appendChild(svg);
+    
+    // Create defs FIRST (before edges that reference them)
+    const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+    
+    // Create gradients for nodes
+    const normalGradient = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
+    normalGradient.setAttribute('id', 'nodeGradient');
+    normalGradient.setAttribute('x1', '0%');
+    normalGradient.setAttribute('y1', '0%');
+    normalGradient.setAttribute('x2', '100%');
+    normalGradient.setAttribute('y2', '100%');
+    const stop1 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+    stop1.setAttribute('offset', '0%');
+    stop1.setAttribute('stop-color', '#818cf8');
+    const stop2 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+    stop2.setAttribute('offset', '100%');
+    stop2.setAttribute('stop-color', '#6366f1');
+    normalGradient.appendChild(stop1);
+    normalGradient.appendChild(stop2);
+    defs.appendChild(normalGradient);
+    
+    const cycleGradient = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
+    cycleGradient.setAttribute('id', 'cycleGradient');
+    cycleGradient.setAttribute('x1', '0%');
+    cycleGradient.setAttribute('y1', '0%');
+    cycleGradient.setAttribute('x2', '100%');
+    cycleGradient.setAttribute('y2', '100%');
+    const cycleStop1 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+    cycleStop1.setAttribute('offset', '0%');
+    cycleStop1.setAttribute('stop-color', '#f87171');
+    const cycleStop2 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+    cycleStop2.setAttribute('offset', '100%');
+    cycleStop2.setAttribute('stop-color', '#ef4444');
+    cycleGradient.appendChild(cycleStop1);
+    cycleGradient.appendChild(cycleStop2);
+    defs.appendChild(cycleGradient);
+    
+    // Create shadow filter
+    const filter = document.createElementNS('http://www.w3.org/2000/svg', 'filter');
+    filter.setAttribute('id', 'shadow');
+    filter.setAttribute('x', '-50%');
+    filter.setAttribute('y', '-50%');
+    filter.setAttribute('width', '200%');
+    filter.setAttribute('height', '200%');
+    const feGaussianBlur = document.createElementNS('http://www.w3.org/2000/svg', 'feGaussianBlur');
+    feGaussianBlur.setAttribute('in', 'SourceAlpha');
+    feGaussianBlur.setAttribute('stdDeviation', '3');
+    const feOffset = document.createElementNS('http://www.w3.org/2000/svg', 'feOffset');
+    feOffset.setAttribute('dx', '2');
+    feOffset.setAttribute('dy', '2');
+    feOffset.setAttribute('result', 'offsetblur');
+    const feComponentTransfer = document.createElementNS('http://www.w3.org/2000/svg', 'feComponentTransfer');
+    feComponentTransfer.setAttribute('in', 'offsetblur');
+    const feFuncA = document.createElementNS('http://www.w3.org/2000/svg', 'feFuncA');
+    feFuncA.setAttribute('type', 'linear');
+    feFuncA.setAttribute('slope', '0.3');
+    feComponentTransfer.appendChild(feFuncA);
+    const feMerge = document.createElementNS('http://www.w3.org/2000/svg', 'feMerge');
+    const feMergeNode1 = document.createElementNS('http://www.w3.org/2000/svg', 'feMergeNode');
+    feMergeNode1.setAttribute('in', 'SourceGraphic');
+    const feMergeNode2 = document.createElementNS('http://www.w3.org/2000/svg', 'feMergeNode');
+    feMergeNode2.setAttribute('in', feComponentTransfer);
+    feMerge.appendChild(feMergeNode1);
+    feMerge.appendChild(feMergeNode2);
+    filter.appendChild(feGaussianBlur);
+    filter.appendChild(feOffset);
+    filter.appendChild(feComponentTransfer);
+    filter.appendChild(feMerge);
+    defs.appendChild(filter);
+    
+    // Create arrow marker for normal edges
+    const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+    marker.setAttribute('id', 'arrowhead');
+    marker.setAttribute('markerWidth', '12');
+    marker.setAttribute('markerHeight', '12');
+    marker.setAttribute('refX', '10');
+    marker.setAttribute('refY', '3.5');
+    marker.setAttribute('orient', 'auto');
+    const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+    polygon.setAttribute('points', '0 0, 12 3.5, 0 7');
+    polygon.setAttribute('fill', '#64748b');
+    marker.appendChild(polygon);
+    defs.appendChild(marker);
+    
+    // Create arrow marker for cycle edges (red)
+    const cycleMarker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+    cycleMarker.setAttribute('id', 'arrowhead-cycle');
+    cycleMarker.setAttribute('markerWidth', '12');
+    cycleMarker.setAttribute('markerHeight', '12');
+    cycleMarker.setAttribute('refX', '10');
+    cycleMarker.setAttribute('refY', '3.5');
+    cycleMarker.setAttribute('orient', 'auto');
+    const cyclePolygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+    cyclePolygon.setAttribute('points', '0 0, 12 3.5, 0 7');
+    cyclePolygon.setAttribute('fill', '#ef4444');
+    cycleMarker.appendChild(cyclePolygon);
+    defs.appendChild(cycleMarker);
+    
+    svg.appendChild(defs);
     
     const nodes = graphData.nodes;
     const edges = graphData.edges;
 
     const nodePositions = {};
-    const nodeRadius = 20;
-    const width = container.clientWidth || 800;
-    const height = 400;
+    const nodeRadius = 28;
+    const labelOffset = 45;
     
-    nodes.forEach((node, i) => {
-        const angle = (2 * Math.PI * i) / nodes.length;
-        nodePositions[node.id] = {
-            x: width / 2 + Math.cos(angle) * Math.min(width, height) / 3,
-            y: height / 2 + Math.sin(angle) * Math.min(width, height) / 3
-        };
-    });
+    // Calculate node positions in a circle with better spacing
+    if (nodes.length > 0) {
+        const centerX = width / 2;
+        const centerY = height / 2;
+        const radius = Math.min(width - padding * 2, height - padding * 2) / 2.5;
+        
+        nodes.forEach((node, i) => {
+            const angle = (2 * Math.PI * i) / nodes.length - Math.PI / 2; // Start from top
+            nodePositions[node.id] = {
+                x: centerX + Math.cos(angle) * radius,
+                y: centerY + Math.sin(angle) * radius
+            };
+        });
+    }
     
-    
+    // Draw edges with curves (after defs are defined)
     edges.forEach(edge => {
         const from = nodePositions[edge.from];
         const to = nodePositions[edge.to];
         if (from && to) {
-            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-            line.setAttribute('x1', from.x);
-            line.setAttribute('y1', from.y);
-            line.setAttribute('x2', to.x);
-            line.setAttribute('y2', to.y);
-            line.setAttribute('stroke', edge.inCycle ? '#ef4444' : '#64748b');
-            line.setAttribute('stroke-width', edge.inCycle ? '3' : '2');
-            line.setAttribute('marker-end', 'url(#arrowhead)');
-            svg.appendChild(line);
+            // Calculate control points for curved edge
+            const dx = to.x - from.x;
+            const dy = to.y - from.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            const curvature = 0.3;
+            
+            // Perpendicular vector for curve
+            const perpX = -dy / distance;
+            const perpY = dx / distance;
+            const midX = (from.x + to.x) / 2;
+            const midY = (from.y + to.y) / 2;
+            const controlX = midX + perpX * distance * curvature;
+            const controlY = midY + perpY * distance * curvature;
+            
+            // Calculate arrow position (offset from node edge)
+            const angle = Math.atan2(to.y - from.y, to.x - from.x);
+            const arrowX = to.x - Math.cos(angle) * nodeRadius;
+            const arrowY = to.y - Math.sin(angle) * nodeRadius;
+            const startX = from.x + Math.cos(angle) * nodeRadius;
+            const startY = from.y + Math.sin(angle) * nodeRadius;
+            
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.setAttribute('d', `M ${startX} ${startY} Q ${controlX} ${controlY} ${arrowX} ${arrowY}`);
+            path.setAttribute('fill', 'none');
+            path.setAttribute('stroke', edge.inCycle ? '#ef4444' : '#64748b');
+            path.setAttribute('stroke-width', edge.inCycle ? '3' : '2');
+            path.setAttribute('opacity', '0.7');
+            path.setAttribute('marker-end', edge.inCycle ? 'url(#arrowhead-cycle)' : 'url(#arrowhead)');
+            path.style.transition = 'all 0.3s ease';
+            svg.appendChild(path);
         }
     });
     
- 
-    const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
-    const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
-    marker.setAttribute('id', 'arrowhead');
-    marker.setAttribute('markerWidth', '10');
-    marker.setAttribute('markerHeight', '10');
-    marker.setAttribute('refX', '9');
-    marker.setAttribute('refY', '3');
-    marker.setAttribute('orient', 'auto');
-    const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
-    polygon.setAttribute('points', '0 0, 10 3, 0 6');
-    polygon.setAttribute('fill', '#64748b');
-    marker.appendChild(polygon);
-    defs.appendChild(marker);
-    svg.appendChild(defs);
-    
+    // Draw nodes (on top of edges)
     nodes.forEach(node => {
         const pos = nodePositions[node.id];
         if (pos) {
+            // Create group for node
+            const nodeGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            nodeGroup.setAttribute('class', 'node-group');
+            nodeGroup.style.cursor = 'pointer';
+            nodeGroup.style.transition = 'transform 0.2s ease';
+            
+            // Draw circle with gradient and shadow
             const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
             circle.setAttribute('cx', pos.x);
             circle.setAttribute('cy', pos.y);
             circle.setAttribute('r', nodeRadius);
-            circle.setAttribute('fill', node.inCycle ? '#ef4444' : '#6366f1');
-            circle.setAttribute('stroke', node.inCycle ? '#991b1b' : '#4f46e5');
-            circle.setAttribute('stroke-width', '2');
-            svg.appendChild(circle);
+            circle.setAttribute('fill', node.inCycle ? 'url(#cycleGradient)' : 'url(#nodeGradient)');
+            circle.setAttribute('stroke', node.inCycle ? '#dc2626' : '#4f46e5');
+            circle.setAttribute('stroke-width', '3');
+            circle.setAttribute('filter', 'url(#shadow)');
+            circle.style.transition = 'all 0.3s ease';
+            nodeGroup.appendChild(circle);
             
+            // Draw text label (centered properly)
             const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
             text.setAttribute('x', pos.x);
-            text.setAttribute('y', pos.y + 5);
+            text.setAttribute('y', pos.y);
             text.setAttribute('text-anchor', 'middle');
-            text.setAttribute('font-size', '12');
+            text.setAttribute('dominant-baseline', 'middle');
+            text.setAttribute('font-size', '14');
+            text.setAttribute('font-weight', 'bold');
             text.setAttribute('fill', 'white');
+            text.setAttribute('pointer-events', 'none');
             text.textContent = node.id;
-            svg.appendChild(text);
+            nodeGroup.appendChild(text);
+            
+            // Draw title label below node
+            const titleText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            titleText.setAttribute('x', pos.x);
+            titleText.setAttribute('y', pos.y + labelOffset);
+            titleText.setAttribute('text-anchor', 'middle');
+            titleText.setAttribute('font-size', '11');
+            titleText.setAttribute('fill', '#475569');
+            titleText.setAttribute('font-weight', '500');
+            titleText.setAttribute('pointer-events', 'none');
+            const title = node.title || `Task ${node.id}`;
+            titleText.textContent = title.length > 20 ? title.substring(0, 20) + '...' : title;
+            nodeGroup.appendChild(titleText);
+            
+            // Add hover effects
+            nodeGroup.addEventListener('mouseenter', () => {
+                circle.setAttribute('r', nodeRadius + 3);
+                circle.setAttribute('stroke-width', '4');
+                nodeGroup.style.transform = 'scale(1.1)';
+            });
+            
+            nodeGroup.addEventListener('mouseleave', () => {
+                circle.setAttribute('r', nodeRadius);
+                circle.setAttribute('stroke-width', '3');
+                nodeGroup.style.transform = 'scale(1)';
+            });
+            
+            // Add tooltip on click
+            nodeGroup.addEventListener('click', () => {
+                const tooltip = document.createElement('div');
+                tooltip.style.position = 'absolute';
+                tooltip.style.background = 'rgba(0, 0, 0, 0.9)';
+                tooltip.style.color = 'white';
+                tooltip.style.padding = '8px 12px';
+                tooltip.style.borderRadius = '6px';
+                tooltip.style.fontSize = '12px';
+                tooltip.style.zIndex = '1000';
+                tooltip.style.pointerEvents = 'none';
+                tooltip.textContent = `Task ${node.id}: ${node.title || 'Untitled'}`;
+                document.body.appendChild(tooltip);
+                
+                const rect = container.getBoundingClientRect();
+                tooltip.style.left = (rect.left + pos.x) + 'px';
+                tooltip.style.top = (rect.top + pos.y - 50) + 'px';
+                
+                setTimeout(() => {
+                    tooltip.remove();
+                }, 2000);
+            });
+            
+            svg.appendChild(nodeGroup);
         }
     });
     
-    
+    // Show cycle warning if applicable
     if (graphData.hasCycle) {
         const cycleWarning = document.getElementById('cycleWarning');
         const cyclePath = document.getElementById('cyclePath');
         if (cycleWarning && cyclePath) {
             cycleWarning.style.display = 'block';
             cyclePath.textContent = `Cycle: ${graphData.cyclePath.join(' → ')}`;
+        }
+    } else {
+        const cycleWarning = document.getElementById('cycleWarning');
+        if (cycleWarning) {
+            cycleWarning.style.display = 'none';
         }
     }
 }
@@ -1044,32 +1346,6 @@ function renderEisenhowerMatrix(matrix) {
 }
 
 
-async function submitFeedback(taskId, wasHelpful) {
-    try {
-        const response = await fetch(`${API_BASE_URL}/tasks/feedback/`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                task_id: taskId,
-                was_helpful: wasHelpful,
-                feedback_notes: ''
-            })
-        });
-        
-        if (response.ok) {
-            showSuccessMessage(wasHelpful ? 'Thank you for your feedback!' : 'Feedback recorded. We\'ll improve!');
-        } else {
-            throw new Error('Failed to submit feedback');
-        }
-    } catch (error) {
-        console.error('Error submitting feedback:', error);
-        alert('Failed to submit feedback. Please try again.');
-    }
-}
-
 window.removeTask = removeTask;
-window.submitFeedback = submitFeedback;
 
 

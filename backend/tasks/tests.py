@@ -3,8 +3,7 @@ Tests for task analyzer functionality.
 """
 from django.test import TestCase
 from datetime import date, timedelta
-from .scoring import PriorityCalculator, WEIGHTS
-from .dependency_validator import DependencyValidator
+from .scoring import PriorityCalculator, WEIGHTS, DependencyValidator
 
 
 class PriorityCalculatorTestCase(TestCase):

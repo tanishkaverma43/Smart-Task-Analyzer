@@ -13,8 +13,7 @@ from .serializers import (
     TaskSuggestionSerializer,
     WeightConfigSerializer
 )
-from .scoring import PriorityCalculator, WEIGHTS
-from .dependency_validator import DependencyValidator
+from .scoring import PriorityCalculator, WEIGHTS, DependencyValidator
 
 
 class AnalyzeTasksView(APIView):
@@ -585,13 +584,20 @@ class TaskClearAllView(APIView):
     """
     
     def delete(self, request):
-        """Delete all tasks from database."""
+        """Delete all tasks from database and reset ID sequence."""
+        from django.db import connection
+        
         count = Task.objects.count()
         Task.objects.all().delete()
         
+        # Reset SQLite auto-increment sequence so new tasks start from ID 1
+        with connection.cursor() as cursor:
+            # Delete the sequence entry for tasks table
+            cursor.execute("DELETE FROM sqlite_sequence WHERE name='tasks_task'")
+        
         return Response(
             {
-                'message': f'Successfully deleted {count} task(s)',
+                'message': f'Successfully deleted {count} task(s). ID sequence reset.',
                 'deleted_count': count
             },
             status=status.HTTP_200_OK
