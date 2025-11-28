@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Task Analyzer</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+       
+        <header class="header">
+            <h1>🎯 Smart Task Analyzer</h1>
+            <p class="subtitle">Intelligently prioritize your tasks based on multiple factors</p>
+        </header>
+
+  
+        <div class="strategy-selector">
+            <label for="sortingStrategy">
+                <strong>🎯 Sorting Strategy:</strong>
+            </label>
+            <select id="sortingStrategy" class="strategy-dropdown" aria-label="Select sorting strategy">
+                <option value="smart">🧠 Smart Balance (Recommended)</option>
+                <option value="fastest">⚡ Fastest Wins</option>
+                <option value="impact">💎 High Impact</option>
+                <option value="deadline">📅 Deadline Driven</option>
+            </select>
+            <div class="strategy-description" id="strategyDescription" role="status" aria-live="polite">
+                Balances urgency, importance, effort, and dependencies for optimal prioritization
+            </div>
+        </div>
+
+        <div class="content-grid">
+         
+            <div class="input-section card">
+                <h2>📝 Add Tasks</h2>
+                
+          
+                <div class="tabs">
+                    <button class="tab-button active" data-tab="form">Single Task</button>
+                    <button class="tab-button" data-tab="bulk">Bulk JSON</button>
+                </div>
+
+              
+                <div id="formTab" class="tab-content active">
+                    <form id="taskForm" class="task-form">
+                        <div class="form-group">
+                            <label for="taskTitle">Title *</label>
+                            <input type="text" id="taskTitle" required placeholder="Fix login bug">
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="dueDate">Due Date *</label>
+                                <input type="date" id="dueDate" required>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="estimatedHours">Hours *</label>
+                                <input type="number" id="estimatedHours" required min="0.1" step="any" placeholder="3">
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="importance">Importance (1-10) *</label>
+                            <input type="range" id="importance" min="1" max="10" value="5">
+                            <div class="importance-value">
+                                <span id="importanceValue">5</span>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="dependencies">Dependencies (comma-separated IDs)</label>
+                            <input type="text" id="dependencies" placeholder="2, 3, 5">
+                            <small>Leave empty if no dependencies</small>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary">
+                            <span>➕</span> Add Task
+                        </button>
+                    </form>
+
+                    
+                    <div class="task-list-section">
+                        <div class="task-list-header">
+                            <h3>Added Tasks (<span id="taskCount">0</span>)</h3>
+                            <button id="clearTasks" class="btn btn-secondary btn-small">Clear All</button>
+                        </div>
+                        <div id="taskList" class="task-list">
+                            <div class="empty-state">
+                                <p>No tasks added yet. Add your first task above!</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+               
+                <div id="bulkTab" class="tab-content">
+                    <div class="form-group">
+                        <label for="jsonInput">Paste JSON Array</label>
+                        <textarea id="jsonInput" rows="12" placeholder='{
+  "tasks": [
+    {
+      "title": "Fix login bug",
+      "due_date": "2025-11-30",
+      "estimated_hours": 3,
+      "importance": 8,
+      "dependencies": []
+    }
+  ]
+}'></textarea>
+                    </div>
+                    <button id="loadJson" class="btn btn-primary">
+                        <span>📥</span> Load Tasks from JSON
+                    </button>
+                    <button id="loadExample" class="btn btn-secondary">
+                        <span>📋</span> Load Example Data
+                    </button>
+                </div>
+
+                <div class="analyze-section">
+                    <button id="analyzeBtn" class="btn btn-analyze" disabled>
+                        <span>🔍</span> Analyze Tasks
+                    </button>
+                </div>
+            </div>
+
+           
+            <div class="output-section card">
+                <h2>📊 Priority Results</h2>
+        
+               
+                <div id="loadingState" class="loading-state" style="display: none;">
+                    <div class="spinner"></div>
+                    <p>Analyzing your tasks...</p>
+                </div>
+
+                <div id="errorState" class="error-state" style="display: none;">
+                    <div class="error-icon">⚠️</div>
+                    <h3>Error</h3>
+                    <p id="errorMessage"></p>
+                    <button id="retryBtn" class="btn btn-secondary">Retry</button>
+                </div>
+
+              
+                <div id="emptyState" class="empty-state-output">
+                    <div class="empty-icon">🎯</div>
+                    <h3>Ready to Prioritize</h3>
+                    <p>Add tasks and click "Analyze Tasks" to see intelligent priority rankings.</p>
+                </div>
+
+               
+                <div id="results" style="display: none;">
+                  
+                    <div class="strategy-indicator" id="strategyIndicator">
+                        <span class="strategy-label">Active Strategy:</span>
+                        <span class="strategy-name" id="activeStrategyName">Smart Balance</span>
+                    </div>
+                    
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-value" id="totalTasks">0</div>
+                            <div class="stat-label">Total Tasks</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="highPriority">0</div>
+                            <div class="stat-label">High Priority</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="avgScore">0</div>
+                            <div class="stat-label">Avg Score</div>
+                        </div>
+                    </div>
+
+                    
+                    <div id="taskResults" class="task-results"></div>
+                </div>
+
+             
+                <div id="suggestions" style="display: none;">
+                    <div class="suggestions-header">
+                        <h3>💡 Top 3 Recommendations</h3>
+                    </div>
+                    <div id="suggestionsList"></div>
+                </div>
+
+                <div id="dependencyGraph" style="display: none;">
+                    <div class="graph-header">
+                        <h3>🔗 Dependency Graph</h3>
+                        <button id="toggleGraph" class="btn btn-secondary btn-small">Hide Graph</button>
+                    </div>
+                    <div id="graphContainer" style="width: 100%; height: 400px; border: 1px solid var(--border); border-radius: var(--radius-md); background: white;"></div>
+                    <div id="cycleWarning" style="display: none; margin-top: 1rem; padding: 1rem; background: #fee2e2; border-radius: var(--radius-md); color: #991b1b;">
+                        <strong>⚠️ Circular Dependency Detected!</strong>
+                        <div id="cyclePath"></div>
+                    </div>
+                </div>
+
+               
+                <div id="eisenhowerMatrix" style="display: none;">
+                    <div class="matrix-header">
+                        <h3>📊 Eisenhower Matrix</h3>
+                        <button id="toggleMatrix" class="btn btn-secondary btn-small">Hide Matrix</button>
+                    </div>
+                    <div class="matrix-container">
+                        <div class="matrix-grid">
+                            <div class="matrix-quadrant quadrant-q1">
+                                <div class="quadrant-header">Q1: Urgent & Important</div>
+                                <div id="q1Tasks" class="quadrant-tasks"></div>
+                            </div>
+                            <div class="matrix-quadrant quadrant-q2">
+                                <div class="quadrant-header">Q2: Not Urgent & Important</div>
+                                <div id="q2Tasks" class="quadrant-tasks"></div>
+                            </div>
+                            <div class="matrix-quadrant quadrant-q3">
+                                <div class="quadrant-header">Q3: Urgent & Not Important</div>
+                                <div id="q3Tasks" class="quadrant-tasks"></div>
+                            </div>
+                            <div class="matrix-quadrant quadrant-q4">
+                                <div class="quadrant-header">Q4: Not Urgent & Not Important</div>
+                                <div id="q4Tasks" class="quadrant-tasks"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
+
+
